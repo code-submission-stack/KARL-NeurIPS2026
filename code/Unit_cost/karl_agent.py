@@ -25,12 +25,11 @@ from karl_net import KARL_net
 import os,sys
 import math
 os.chdir(sys.path[0])
-
 from MRGNN.encoders import Encoder
-# Import the new KANformerMultiplexFusion instead of BitwiseMultipyLogis
 from MRGNN.mutil_layer_weight import LayerNodeAttention_weight, Cosine_similarity, SemanticAttention, KANformerMultiplexFusion
 from MRGNN.aggregators import MeanAggregator
-# Hyper Parameters:
+
+
 GAMMA = 1  # decay rate of past observations
 UPDATE_TIME = 1000
 EMBEDDING_SIZE = 64
@@ -254,7 +253,7 @@ class KARL:
         return batch_graph
 
     def SetupPredAll(self, idxes, g_list, covered, remove_edges):
-        batch_graph1 = batch_graph.batch_graph(aggregatorID)
+        batch_graph1 = batch_graph.BatchGraph(aggregatorID)
         batch_graph1.SetupPredAll(idxes, g_list, covered, remove_edges)
         batch_graph1.idx_map_list = [it[0] for it in batch_graph1.idx_map_list]
         self.inputs['rep_global'] = self.SetupSparseT(batch_graph1.rep_global)
@@ -280,7 +279,6 @@ class KARL:
                 batch_idxes[j - i] = j
             batch_idxes = np.int32(batch_idxes)
             idx_map_list = self.SetupPredAll(batch_idxes, g_list, covered, remove_edges)
-            #Node input is NONE for not costed scnario
             if isSnapSnot:
                 result = self.MultiDismantler_net_T.test_forward(node_input=self.inputs['node_input'],\
                     subgsum_param=self.inputs['subgsum_param'], n2nsum_param=self.inputs['n2nsum_param'],\
@@ -289,9 +287,6 @@ class KARL:
                 result = self.MultiDismantler_net.test_forward(node_input=self.inputs['node_input'],\
                     subgsum_param=self.inputs['subgsum_param'], n2nsum_param=self.inputs['n2nsum_param'],\
                     rep_global=self.inputs['rep_global'], aux_input=self.inputs['aux_input'],adj=self.inputs['adj'],v_adj=self.inputs['v_adj'])
-            # TOFIX: line below used to be raw_output = result[0]. This is weird because results is supposed to be 
-            # [node_cnt, 1] (Q-values per node). And indeed it resulted in an error! I have fixed it by the line below
-            # look inito it later.
             raw_output = result[:,0]
             pos = 0
             pred = []
