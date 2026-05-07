@@ -274,22 +274,6 @@ and the fully KAN-parameterised KANformer attention projections.
 These costs buy a **21.8% AUDC reduction** over MultiDismantler — a Pareto-optimal
 operating point among all evaluated dismantling methods.
 
----
-
-## Citation
-
-If you find this work useful, please cite:
-
-```bibtex
-@inproceedings{karl2026neurips,
-  title     = {{KARL}: Kolmogorov-Arnold Reinforcement Learning for
-               Dismantling Multiplex Networks},
-  author    = {Anonymous},
-  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
-  year      = {2026},
-  note      = {Under review}
-}
-```
 
 ---
 
