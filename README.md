@@ -160,7 +160,7 @@ Place `.edges` files in `data/multiplex_edges/`:
 | Sanremo2016 | 56,562 | 1–2 | Social |
 
 All datasets are publicly available from the
-[Manlio De Domenico multiplex repository](http://mlg.ucd.ie/datasets/multiplex.html).
+[Manlio De Domenico multiplex repository]([http://mlg.ucd.ie/datasets/multiplex.html](https://manliodedomenico.com/data.php)).
 
 ---
 
