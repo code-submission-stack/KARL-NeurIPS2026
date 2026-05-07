@@ -73,8 +73,6 @@ def print_parameter_count(dqn):
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  SECTION 2 — Training time
-#  Reads from MultiDismantler_torch's own timer (injected below via wrapper).
-#  We time a single call to dqn.Fit() on the fly here.
 #  This gives: milliseconds per gradient step at training scale (N=30-50).
 # ──────────────────────────────────────────────────────────────────────────────
 def measure_fit_time(dqn, n_steps=100):

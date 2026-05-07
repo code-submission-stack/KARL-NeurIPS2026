@@ -3,7 +3,6 @@ import random
 from graph import Graph
 from karl_env import KARLEnv
 
-#The ReplaySample class is used to store a batch of experience samples. Each experience sample includes a sequence of states, a sequence of next states, a sequence of actions, a sequence of rewards, and a sequence of termination state flags.
 class ReplaySample:
     def __init__(self, batch_size: int):
         self.g_list: List[Graph] = []
@@ -17,31 +16,20 @@ class ReplaySample:
 
 class NStepReplayMem:
     def __init__(self, memory_size: int):
-     
-        self.memory_size = memory_size
-        
-        self.graphs: List[Graph] = [Graph()] * memory_size
-        
-        self.actions: List[int] = [0] * memory_size
-       
+        self.memory_size = memory_size        
+        self.graphs: List[Graph] = [Graph()] * memory_size      
+        self.actions: List[int] = [0] * memory_size       
         self.rewards: List[float] = [0.0] * memory_size
-        
         self.states: List[List[int]] = [[] for _ in range(memory_size)]
-        
-        self.s_primes: List[List[int]] = [[] for _ in range(memory_size)]
-        
+        self.s_primes: List[List[int]] = [[] for _ in range(memory_size)]    
         self.terminals: List[bool] = [False] * memory_size
-        
         self.current = 0
-        
         self.count = 0
-       
         self.remove_edges: List[List[set]] = [[set(), set()] for _ in range(memory_size)]
         self.remove_edges_primes: List[List[set]] = [[set(), set()] for _ in range(memory_size)]
 
 
-    def add(self, g: Graph, s_t: List[int], a_t: int, r_t: float, s_prime: List[int], terminal: bool, remove_edges: List[set], remove_edges_primes: List[set]):
-   
+    def add(self, g: Graph, s_t: List[int], a_t: int, r_t: float, s_prime: List[int], terminal: bool, remove_edges: List[set], remove_edges_primes: List[set]):   
         self.graphs[self.current] = g
         self.actions[self.current] = a_t
         self.rewards[self.current] = r_t
@@ -50,12 +38,10 @@ class NStepReplayMem:
         self.terminals[self.current] = terminal
         self.remove_edges[self.current] = [remove_edges[0].copy(),remove_edges[1].copy()]
         self.remove_edges_primes[self.current] = [remove_edges_primes[0].copy(),remove_edges_primes[1].copy()]  
-       
         self.count = max(self.count, self.current + 1)
         self.current = (self.current + 1) % self.memory_size
 
-    def add_from_env(self, env: KARLEnv, n_step: int):
-       
+    def add_from_env(self, env: KARLEnv, n_step: int):     
         assert env.isTerminal()
         num_steps = len(env.state_seq)
         assert num_steps > 0
@@ -82,9 +68,7 @@ class NStepReplayMem:
             
     def sampling(self, batch_size: int) -> ReplaySample:
         assert self.count >= batch_size
-        result = ReplaySample(batch_size)
-
-      
+        result = ReplaySample(batch_size)   
         indices = random.sample(range(self.count), batch_size)
         result.g_list = [self.graphs[i] for i in indices]
         result.list_st = [self.states[i].copy() for i in indices]

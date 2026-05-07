@@ -1,5 +1,3 @@
-# utils.py
-
 from typing import List
 from disjoint_set import DisjointSet
 from graphutils import GraphUtil

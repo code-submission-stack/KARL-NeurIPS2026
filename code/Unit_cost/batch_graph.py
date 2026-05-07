@@ -6,7 +6,7 @@ import Mcc
 import networkx as nx
 from typing import List, Tuple, Dict
 import sys
-#   Preparation of batch data in graph neural networks
+
 class SparseMatrix:
     def __init__(self):
         self.rowIndex = []
@@ -136,7 +136,6 @@ class BatchGraph:
                         self.rep_global[h].colIndex.append(i)
                         self.rep_global[h].value.append(1.0)
                     t[h] += 1
-            #error
             assert t[0] == self.avail_act_cnt[i][0]
 
             if actions:
@@ -182,12 +181,6 @@ class BatchGraph:
 
     def SetupPredAll(self, idxes, g_list, covered, remove_edges):
         self.Setup_graph_input(idxes, g_list, covered, None, remove_edges)
-    '''
-    def convert_sparse_to_tensor(self, matrix):
-        indices = np.column_stack((matrix.rowIndex, matrix.colIndex))
-        return torch.sparse.FloatTensor(torch.LongTensor(indices).t(), torch.FloatTensor(matrix.value),
-                                         torch.Size([matrix.rowNum, matrix.colNum]))
-    '''
 
     def convert_sparse_to_tensor(self, matrix):
         rowIndex= matrix.rowIndex
@@ -203,16 +196,6 @@ class BatchGraph:
         return_dict = {"index": index, "value": value, "m":rowNum, "n":colNum}
         return return_dict
 
-    '''
-    def graph_resize(self, size, node_cnt):
-        self.graph = Graph(size, node_cnt)
-
-    def graph_add_node(self, i, node):
-        self.graph.add_node(i, node)
-
-    def graph_add_edge(self, edge, x, y):
-        self.graph.add_edge(edge, x, y)
-    '''
 
     def n2n_construct(self, aggregatorID):
         result = [SparseMatrix(),SparseMatrix()]
@@ -238,7 +221,6 @@ class BatchGraph:
                     elif aggregatorID == 1:
                         result[h].value.append(1.0 / len(list1))
                     elif aggregatorID == 2:
-                        #neighborDegree = len(self.graph.in_edges.head[list1[j].second])
                         neighborDegree = len(self.graph[h].in_edges.head[list1[j][1]])
                         selfDegree = len(list1)
                         norm = np.sqrt(neighborDegree + 1) * np.sqrt(selfDegree + 1)

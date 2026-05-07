@@ -25,10 +25,8 @@ from karl_net import KARL_net
 import os,sys
 import math
 os.chdir(sys.path[0])
-from MRGNN.encoders import Encoder
-# from MRGNN.mutil_layer_weight import LayerNodeAttention_weight, Cosine_similarity, SemanticAttention, KANformerMultiplexFusion
+# from MRGNN.encoders import Encoder
 from MRGNN.mutil_layer_weight import KANformerMultiplexFusion
-# from MRGNN.aggregators import MeanAggregator
 
 
 GAMMA = 1  # decay rate of past observations
@@ -50,7 +48,6 @@ NUM_MIN = 30
 NUM_MAX = 50
 REG_HIDDEN = 32
 M = 4  # how many edges selected each time for BA model
-
 BATCH_SIZE = 64
 initialization_stddev = 0.01 
 n_valid = 200 
@@ -228,7 +225,6 @@ class KARL:
         batch_graph.n2nsum_param = batch_graph.n2nsum_param[0]
         batch_graph.laplacian_param = batch_graph.laplacian_param[0]
         batch_graph.subgsum_param = batch_graph.subgsum_param[0]
-        #batch_graph.subgraph_id_span = batch_graph.subgraph_id_span[0]
         batch_graph.avail_act_cnt = batch_graph.avail_act_cnt[0]
         batch_graph.graph = batch_graph.graph[0]
         return batch_graph
@@ -238,11 +234,8 @@ class KARL:
         batch_graph1.SetupPredAll(idxes, g_list, covered, remove_edges)
         batch_graph1.idx_map_list = [it[0] for it in batch_graph1.idx_map_list]
         self.inputs['rep_global'] = self.SetupSparseT(batch_graph1.rep_global)
-
         self.inputs['n2nsum_param'] = self.SetupSparseT(batch_graph1.n2nsum_param)
-
         self.inputs['subgsum_param'] = self.SetupSparseT(batch_graph1.subgsum_param)
-
         self.inputs['node_input'] = None
         self.inputs['aux_input'] = Variable(torch.tensor(batch_graph1.aux_feat).type(torch.FloatTensor)).to(self.device)
         self.inputs['adj'] = batch_graph1.adj
@@ -293,7 +286,7 @@ class KARL:
     def PredictWithSnapshot(self,g_list,covered,remove_edges):
         result = self.Predict(g_list,covered,remove_edges,True)
         return result
-    #pass
+
     def TakeSnapShot(self):
         self.karl_net_T.load_state_dict(self.karl_net.state_dict())
 
@@ -323,7 +316,6 @@ class KARL:
                     q_rhs=GAMMA * self.Max(list_pred[i])
             q_rhs += sample.list_rt[i]
             list_target[i] = q_rhs
-            # list_target.append(q_rhs)
         if self.IsPrioritizedSampling:
             return self.fit_with_prioritized(sample.b_idx,sample.ISWeights,sample.g_list, sample.list_st, sample.list_at,list_target)
         else:
@@ -586,7 +578,6 @@ class KARL:
                 step = np.max([int(stepRatio*g.num_nodes),1]) #step size
             else:
                 step = 1
-            #step = g.num_nodes
             self.InsertGraph(g, is_test=True)
             t1 = time.time()
             average_n = 1
@@ -610,167 +601,12 @@ class KARL:
                     f_out.write('%.8f\n' % Mcc)
         nodes = list(range(g.num_nodes))
         remain_nodes = list(set(nodes)^set(solution))
-        #score_total = score + (len(remain_nodes)-1) / (g.max_rank * g.num_nodes)
         with open(result_file2, 'a') as f_out:
             f_out.write('%.8f\n' % score_mean)
             f_out.write('%.8f\n' % score_std)
         self.ClearTestGraphs()
         return solution, solution_time, score
-    
-    # def EvaluateRealDataLookahead(self, checkpoints, data_test, save_dir, stepRatio, num_nodes, layers):
-    #     """
-    #     Ordinal Rank Consensus (Borda Count) for Res-GKAN:
-    #     Aggregates policies by averaging ordinal ranks rather than raw Q-values,
-    #     completely immunizing the ensemble against Chebyshev scale drift.
-    #     """
-    #     import time
-    #     import copy
-    #     import os
-    #     import mvc_env
-    #     from scipy.stats import rankdata # NEW IMPORT
-        
-    #     start_time = time.time()
-    #     ensemble_nets = []
-    #     print(f"Loading {len(checkpoints)} checkpoints for Rank-Based Consensus...")
-    #     for ckpt in checkpoints:
-    #         self.LoadModel(ckpt)
-    #         net_copy = copy.deepcopy(self.MultiDismantler_net)
-    #         net_copy.eval()
-    #         ensemble_nets.append(net_copy)
 
-    #     test_name = data_test.split('/')[-1]
-    #     save_dir_local = f'{save_dir}/StepRatio_{stepRatio:.4f}_hybrid'
-    #     if not os.path.exists(save_dir_local):
-    #         os.makedirs(save_dir_local, exist_ok=True)
-            
-    #     result_file1 = '%s/%s_%s_%s%s.%s' % (save_dir_local, "Soluion", test_name.split('.')[0], layers[0], layers[1], 'txt')
-    #     result_file2 = '%s/%s_%s_%s%s.%s' % (save_dir_local, "NormalizedLMCC", test_name.split('.')[0], layers[0], layers[1], 'txt')
-        
-    #     layers_matrix, graphs = self.read_multiplex("../../data/real/%s" % (test_name), num_nodes)
-    #     g = graph.Graph_test(graphs[layers[0]-1], graphs[layers[1]-1])
-        
-    #     env = mvc_env.MvcEnv(self.test_env.norm)
-    #     env.s0(g)
-        
-    #     sol = []
-    #     f_sol = open(result_file1, 'w')
-        
-    #     with torch.no_grad():
-    #         while not env.isTerminal():
-    #             g_list = [env.graph]
-    #             total_ranks = None
-                
-    #             for net in ensemble_nets:
-    #                 self.MultiDismantler_net = net
-    #                 list_pred = self.PredictWithCurrentQNet(g_list, [env.action_list], [env.remove_edge])
-    #                 q_pred = list_pred[0] 
-                    
-    #                 # Convert uncalibrated Q-values to strict ordinal ranks
-    #                 # Highest Q-value gets the highest rank number
-    #                 ranks = rankdata(q_pred)
-                    
-    #                 if total_ranks is None:
-    #                     total_ranks = ranks.copy()
-    #                 else:
-    #                     total_ranks += ranks
-                
-    #             # Pick the node with the highest aggregate Borda rank
-    #             best_actual_node = self.argMax(total_ranks)
-                
-    #             env.stepWithoutReward(best_actual_node)
-    #             sol.append(best_actual_node)
-    #             f_sol.write('%d\n' % best_actual_node)
-                
-    #     f_sol.close()
-        
-    #     with open(result_file2, 'w') as f_out:
-    #         for j in range(env.graph.num_nodes):
-    #             if j < len(env.MaxCCList):
-    #                 f_out.write('%.8f\n' % env.MaxCCList[j])
-    #             else:
-    #                 f_out.write('%.8f\n' % (1 / env.graph.max_rank))
-            
-    #         f_out.write('%.8f\n' % env.score)
-    #         f_out.write('%.8f\n' % 0.0) 
-        
-    #     return sol, time.time() - start_time, env.score
-
-
-    # def EvaluateRealDataPhysicalRollout(self, model_file, data_test, save_dir, stepRatio, num_nodes, layers, top_m=8):
-    #     """
-    #     Corrected KAN-Guided Physical Rollout (Single Model)
-    #     KAN proposes Top-M candidates; physics simulates each removal and selects the true best.
-    #     """
-    #     import time
-    #     import copy
-    #     import os
-    #     import numpy as np
-    #     from scipy.integrate import simpson
-
-    #     start_time = time.time()
-        
-    #     self.LoadModel(model_file)
-    #     self.MultiDismantler_net.eval()
-        
-    #     test_name = data_test.split('/')[-1]
-    #     save_dir_local = f'{save_dir}/StepRatio_{stepRatio:.4f}_physical_rollout'
-    #     os.makedirs(save_dir_local, exist_ok=True)
-        
-    #     result_file1 = f'{save_dir_local}/Solution_{test_name.split(".")[0]}_{layers[0]}{layers[1]}.txt'
-    #     result_file2 = f'{save_dir_local}/NormalizedLMCC_{test_name.split(".")[0]}_{layers[0]}{layers[1]}.txt'
-        
-    #     layers_matrix, graphs = self.read_multiplex(f"../../data/real/{test_name}", num_nodes)
-    #     g = graph.Graph_test(graphs[layers[0]-1], graphs[layers[1]-1])
-        
-    #     env = mvc_env.MvcEnv(self.test_env.norm)
-    #     env.s0(g)
-        
-    #     sol = []
-    #     with open(result_file1, 'w') as f_sol:
-    #         while not env.isTerminal():
-    #             g_list = [env.graph]
-                
-    #             # KAN proposes Q-values for valid actions only
-    #             list_pred = self.PredictWithCurrentQNet(g_list, [env.action_list], [env.remove_edge])
-    #             q_pred = list_pred[0].flatten()
-                
-    #             # Top-M candidates (safe indexing)
-    #             current_top_m = min(top_m, len(env.action_list))
-    #             if current_top_m == 0:
-    #                 break
-    #             top_indices = np.argsort(-q_pred)[:current_top_m]
-    #             top_candidates = [env.action_list[i] for i in top_indices]
-                
-    #             # Physical verification (lightweight)
-    #             best_action = top_candidates[0]
-    #             best_lmcc = float('inf')
-                
-    #             for candidate in top_candidates:
-    #                 env_clone = copy.deepcopy(env)
-    #                 env_clone.stepWithoutReward(candidate)
-    #                 simulated_lmcc = env_clone.MaxCCList[-1] if env_clone.MaxCCList else 1.0
-                    
-    #                 if simulated_lmcc < best_lmcc:
-    #                     best_lmcc = simulated_lmcc
-    #                     best_action = candidate
-                
-    #             # Execute best action
-    #             env.stepWithoutReward(best_action)
-    #             sol.append(best_action)
-    #             f_sol.write(f'{best_action}\n')
-        
-    #     # Consistent AUDC calculation
-    #     padded = [env.MaxCCList[j] if j < len(env.MaxCCList) else 1.0 / env.graph.max_rank 
-    #               for j in range(env.graph.num_nodes)]
-    #     final_audc = simpson(np.array(padded), np.linspace(0, 1, len(padded)))
-        
-    #     with open(result_file2, 'w') as f_out:
-    #         for val in padded:
-    #             f_out.write(f'{val:.8f}\n')
-    #         f_out.write(f'{final_audc:.8f}\n')
-    #         f_out.write('0.00000000\n')
-        
-    #     return sol, time.time() - start_time, final_audc
     
     def GetSolution(self, gid, test_name, step=1):
         g_list = []

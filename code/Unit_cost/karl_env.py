@@ -7,7 +7,6 @@ import networkx as nx
 import Mcc
 class KARLEnv:
     def __init__(self, norm):
-        # Constructor method of the MvcEnv class that initializes the instance variables
         self.norm = norm  
         self.graph = Graph(0)
         self.numCoveredEdges = [0,0]  # of edges covered
@@ -29,7 +28,6 @@ class KARLEnv:
         self.G1 = None
         self.G2 = None
     def s0(self, _g: Graph):
-        # reset the state of the environment
         self.graph = _g  
         self.covered_set.clear()  
         self.action_list.clear()  
@@ -39,8 +37,6 @@ class KARLEnv:
         self.act_seq.clear()  
         self.reward_seq.clear()  
         self.sum_rewards.clear() 
-        #self.single_nodes_after_act.clear()
-        #self.not_chose_nodes.clear()
         self.remove_edge[0].clear()
         self.remove_edge[1].clear()
         self.state_seq_edges.clear()
@@ -50,11 +46,10 @@ class KARLEnv:
         self.G1 = None
         self.G2 = None
         self.getMaxConnectedNodesNum()
+
     def step(self, a):
-       
         assert self.graph
         assert a not in self.covered_set
-
         self.state_seq.append(self.action_list.copy()) 
         remove_edge = [self.remove_edge[0].copy(),self.remove_edge[1].copy()]
         self.state_seq_edges.append(remove_edge)
@@ -72,12 +67,10 @@ class KARLEnv:
         return r_t
 
     def stepWithoutReward(self, a):
-     
         assert self.graph
         assert a not in self.covered_set
         self.covered_set.add(a)  
         self.action_list.append(a)  
-        
         for i in range(2):
             for neigh in list(self.graph.adj_list[i][a][1]):            
                     if neigh not in self.covered_set and (neigh,a) not in self.remove_edge[i]:
@@ -87,7 +80,6 @@ class KARLEnv:
         self.MaxCCList.append(-1 * r_t * self.graph.num_nodes)
     
     def randomAction(self):
-       
         assert self.graph
         self.avail_list.clear()  
         for i in range(self.graph.num_nodes):
@@ -101,11 +93,9 @@ class KARLEnv:
         return idx
 
     def betweenAction(self):
-        
         assert self.graph
         adj_dic_origin = {}
         adj_list_reID = []
-
         for i in range(self.graph.num_nodes):
             if i not in self.covered_set:
                 for neigh in self.graph.adj_list[i]:
@@ -118,27 +108,21 @@ class KARLEnv:
         id2node = {num: node for num, node in enumerate(adj_dic_origin)}
         node2id = {node: num for num, node in id2node.items()}
         adj_list_reID = [[node2id[neigh] for neigh in adj_dic_origin[node]] for node in adj_dic_origin]
-
         BC = self.betweenness(adj_list_reID)  
         maxID = max(range(len(BC)), key=BC.__getitem__)
         idx = id2node[maxID]  
-
         return idx
 
     def isTerminal(self):
-       
         assert self.graph
         return self.graph.num_edges[0] == (self.numCoveredEdges[0] + len(self.remove_edge[0])/2) or self.graph.num_edges[1] == (self.numCoveredEdges[1] + len(self.remove_edge[1])/2)
         
     def getReward(self,a):
-        
         orig_node_num = float(self.graph.num_nodes)
         rank = self.getMaxConnectedNodesNum(a)
         return -float(rank) / (self.graph.max_rank * orig_node_num)
-        #return -float(self.getRemainingCNDScore()) / (orig_node_num * orig_node_num * (orig_node_num - 1) / 2)
 
     def getMaxConnectedNodesNum(self,a=None):
-        
         assert self.graph
         if self.flag == 0 :
             self.G1 = nx.Graph()
@@ -162,11 +146,9 @@ class KARLEnv:
         return float(rank)
 
     def betweenness(self, adj_list):
-     
         nvertices = len(adj_list)
         CB = [0.0] * nvertices
         norm = float((nvertices - 1) * (nvertices - 2))
-
         for i in range(nvertices):
             PredList = [[] for _ in range(nvertices)]
             d = [float('inf')] * nvertices
@@ -176,7 +158,6 @@ class KARLEnv:
             delta = [0.0] * nvertices
             Q = [i]
             S = []
-
             while Q:
                 u = Q.pop(0)
                 S.append(u)
@@ -188,23 +169,19 @@ class KARLEnv:
                     if d[v] == d[u] + 1:
                         sigma[v] += sigma[u]
                         PredList[v].append(u)
-
             while S:
                 u = S.pop()
                 for pred in PredList[u]:
                     delta[pred] += (sigma[pred] / sigma[u]) * (1 + delta[u])
                 if u != i:
                     CB[u] += delta[u]
-
             PredList.clear()
             d.clear()
             sigma.clear()
             delta.clear()
-
         for i in range(nvertices):
             if norm == 0:
                 CB[i] = 0
             else:
                 CB[i] = CB[i] / norm
-
         return CB

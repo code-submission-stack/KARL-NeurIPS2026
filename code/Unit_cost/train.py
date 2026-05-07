@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from karl_agent import KARL
 import os,sys
 import torch
