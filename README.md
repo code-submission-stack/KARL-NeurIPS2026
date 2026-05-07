@@ -5,8 +5,6 @@
 </p>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg"/></a>
-  <a href="https://neurips.cc/2026"><img src="https://img.shields.io/badge/NeurIPS-2026-4b44ce.svg"/></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg"/></a>
   <img src="https://img.shields.io/badge/Python-3.10-blue.svg"/>
   <img src="https://img.shields.io/badge/PyTorch-2.1-orange.svg"/>
