@@ -51,15 +51,7 @@ class ChebyKANLayer(nn.Module):
         cheby_polys = [torch.ones_like(x), x]
         for i in range(2, self.degree + 1):
             cheby_polys.append(2 * x * cheby_polys[-1] - cheby_polys[-2])
-        
-        # Stack along new dimension: [batch_size, input_dim, degree + 1]
         poly_stack = torch.stack(cheby_polys, dim=-1)
-        
-        # Sum over input dimension and degree:
-        # We want: [batch_size, output_dim]
-        # Equation: y_j = sum_i sum_d (c_{ijd} * T_d(x_i))
-        # bid = batch, input, degree
-        # iod = input, output, degree
         y = torch.einsum('bid,iod->bo', poly_stack, self.cheby_coeffs)
         
         return y + self.bias

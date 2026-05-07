@@ -26,8 +26,9 @@ import os,sys
 import math
 os.chdir(sys.path[0])
 from MRGNN.encoders import Encoder
-from MRGNN.mutil_layer_weight import LayerNodeAttention_weight, Cosine_similarity, SemanticAttention, KANformerMultiplexFusion
-from MRGNN.aggregators import MeanAggregator
+# from MRGNN.mutil_layer_weight import LayerNodeAttention_weight, Cosine_similarity, SemanticAttention, KANformerMultiplexFusion
+from MRGNN.mutil_layer_weight import KANformerMultiplexFusion
+# from MRGNN.aggregators import MeanAggregator
 
 
 GAMMA = 1  # decay rate of past observations
@@ -57,14 +58,12 @@ n_train = 1000
 aux_dim = 4
 num_env = 32
 inf = 2147483647/2
-#########################  embedding method ##########################################################
 max_bp_iter = 3
 aggregatorID = 0 #0:sum; 1:mean; 2:GCN
 embeddingMethod = 1   #0:structure2vec; 1:graphsage
 
 class KARL:
     def __init__(self):
-        # init some parameters
         self.embedding_size = EMBEDDING_SIZE
         self.learning_rate = LEARNING_RATE
         self.g_type = 'GMM'
@@ -73,8 +72,6 @@ class KARL:
         self.inputs = dict()
         self.reg_hidden = REG_HIDDEN
         self.utils = utils.Utils()
-
-        ############----------------------------- variants of DQN(start) ------------------- ###################################
         self.IsHuberloss = False
         if(self.IsHuberloss):
             self.loss = nn.HuberLoss(delta=1.0)
@@ -85,8 +82,6 @@ class KARL:
         self.IsPrioritizedSampling = False
         self.IsMultiStepDQN = True     ##(if IsNStepDQN=False, N_STEP==1)
 
-        ############----------------------------- variants of DQN(end) ------------------- ###################################
-        #Simulator
         self.ngraph_train = 0
         self.ngraph_test = 0
         self.env_list=[]
@@ -102,52 +97,39 @@ class KARL:
             self.g_list.append(graph.Graph())
 
         self.test_env = karl_env.KARLEnv(NUM_MAX)
-
         print("CUDA:", torch.cuda.is_available())
         torch.set_num_threads(16)
 
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        
-        # --- KANFORMER UPDATE START ---
-        # Replace the linear BitwiseMultipyLogis with the fully non-linear KANformerMultiplexFusion
         layerNodeAttention_weight1 = KANformerMultiplexFusion(
             features_num=EMBEDDING_SIZE, 
             dropout=0.5, 
             alpha=0.5,
             metapath_number=2, 
             device=self.device,
-            num_heads=4 # You can tune the number of Transformer heads here
+            num_heads=4 # Tune the number of Transformer heads here
         ).to(self.device)
-        # --- KANFORMER UPDATE END ---
-        
-        # The new KAN-attention module is seamlessly passed into the networks
-        self.MultiDismantler_net = KARL_net(layerNodeAttention_weight1, device=self.device)
-        self.MultiDismantler_net_T = KARL_net(layerNodeAttention_weight1, device=self.device)
-        self.MultiDismantler_net.to(self.device)
-        self.MultiDismantler_net_T.to(self.device)
 
-        self.MultiDismantler_net_T.eval()
-
-        # self.optimizer = optim.Adam(self.MultiDismantler_net.parameters(), lr=self.learning_rate)
+        self.karl_net = KARL_net(layerNodeAttention_weight1, device=self.device)
+        self.karl_net_T = KARL_net(layerNodeAttention_weight1, device=self.device)
+        self.karl_net.to(self.device)
+        self.karl_net_T.to(self.device)
+        self.karl_net_T.eval()
         base_params = []
         kan_params = []
-        
-        for name, param in self.MultiDismantler_net.named_parameters():
-            # Catch the B-Spline layers in the encoder and the ChebyKAN layers in the decoder
+        for name, param in self.karl_net.named_parameters():
             if 'kan_weight' in name or 'spline_weight' in name or 'ChebyKAN' in name:
                 kan_params.append(param)
             else:
                 base_params.append(param)
-                
-        # Apply the 10x learning rate multiplier exclusively to the univariate functions
         self.optimizer = optim.Adam([
             {'params': base_params, 'lr': LEARNING_RATE},
             {'params': kan_params, 'lr': LEARNING_RATE * 10}
         ], weight_decay=1e-5) # Weight decay helps prevent B-spline overfitting
 
 
-        pytorch_total_params = sum(p.numel() for p in self.MultiDismantler_net.parameters())
-        print("Total number of MultiDismantler_net parameters: {}".format(pytorch_total_params))
+        pytorch_total_params = sum(p.numel() for p in self.karl_net.parameters())
+        print("Total number of karl_net parameters: {}".format(pytorch_total_params))
         self.flag = 1
     def gen_graph(self,num_min,num_max):
         max_n = num_max
@@ -160,10 +142,9 @@ class KARL:
         print('\ngenerating new training graphs...')
         sys.stdout.flush()
         self.ClearTrainGraphs()
-        #1000
         for i in tqdm(range(n_train)):
             g = self.gen_graph(num_min, num_max)
-            if g.max_rank == 1: #if generated graph's original Mcc = 1, then remove it. 
+            if g.max_rank == 1:
                 continue
             self.InsertGraph(g, is_test=False)
 
@@ -215,7 +196,7 @@ class KARL:
                     a_t = self.argMax(pred[i])
                 self.env_list[i].step(a_t)
 
-    #pass
+
     def PlayGame(self,n_traj, eps):
         self.Run_simulator(n_traj, eps, self.TrainSet, N_STEP)
 
@@ -280,11 +261,11 @@ class KARL:
             batch_idxes = np.int32(batch_idxes)
             idx_map_list = self.SetupPredAll(batch_idxes, g_list, covered, remove_edges)
             if isSnapSnot:
-                result = self.MultiDismantler_net_T.test_forward(node_input=self.inputs['node_input'],\
+                result = self.karl_net_T.test_forward(node_input=self.inputs['node_input'],\
                     subgsum_param=self.inputs['subgsum_param'], n2nsum_param=self.inputs['n2nsum_param'],\
                     rep_global=self.inputs['rep_global'], aux_input=self.inputs['aux_input'],adj=self.inputs['adj'],v_adj=self.inputs['v_adj'])
             else:
-                result = self.MultiDismantler_net.test_forward(node_input=self.inputs['node_input'],\
+                result = self.karl_net.test_forward(node_input=self.inputs['node_input'],\
                     subgsum_param=self.inputs['subgsum_param'], n2nsum_param=self.inputs['n2nsum_param'],\
                     rep_global=self.inputs['rep_global'], aux_input=self.inputs['aux_input'],adj=self.inputs['adj'],v_adj=self.inputs['v_adj'])
             raw_output = result[:,0]
@@ -314,7 +295,7 @@ class KARL:
         return result
     #pass
     def TakeSnapShot(self):
-        self.MultiDismantler_net_T.load_state_dict(self.MultiDismantler_net.state_dict())
+        self.karl_net_T.load_state_dict(self.karl_net.state_dict())
 
     def Fit(self):
         sample = self.nStepReplayMem.sampling(BATCH_SIZE)
@@ -393,29 +374,20 @@ class KARL:
             if (i + BATCH_SIZE) > n_graphs:
                 bsize = n_graphs - i
             batch_idxes = np.zeros(bsize)
-            # batch_idxes = []
             for j in range(i, i + bsize):
                 batch_idxes[j-i] = j
-                # batch_idxes.append(j)
             batch_idxes = np.int32(batch_idxes)
             self.SetupTrain(batch_idxes, g_list, covered, actions,list_target, remove_edges)
-            #Node inpute is NONE for not costed scnario
-            q_pred, cur_message_layer = self.MultiDismantler_net.train_forward(node_input=self.inputs['node_input'],\
+            q_pred, cur_message_layer = self.karl_net.train_forward(node_input=self.inputs['node_input'],\
                 subgsum_param=self.inputs['subgsum_param'], n2nsum_param=self.inputs['n2nsum_param'],\
                 action_select=self.inputs['action_select'], aux_input=self.inputs['aux_input'],adj=self.inputs['adj'],v_adj=self.inputs['v_adj'])
-
             loss = self.calc_loss(q_pred, cur_message_layer)
             loss.backward()
             self.optimizer.step()
-
             loss_values += loss.item()*bsize
-
         return loss_values / len(g_list)
 
     def calc_loss(self, q_pred, cur_message_layer) :
-        # first order reconstruction loss
-        # OLD loss_recons = 2 * torch.trace(torch.matmul(torch.transpose(cur_message_layer,0,1),\
-        #    torch.matmul(self.inputs['laplacian_param'], cur_message_layer)))
         loss = torch.zeros(1,device=self.device)
         loss1 = torch.zeros(1,device=self.device)
         loss2 = torch.zeros(1,device=self.device)
@@ -426,12 +398,9 @@ class KARL:
                 self.inputs['laplacian_param'][i]['m'], self.inputs['laplacian_param'][i]['n'],\
                  cur_message_layer[i])))
             edge_num = torch.sum(self.inputs['n2nsum_param'][i]['value'])
-            #edge_num = torch.sum(self.inputs['n2nsum_param'])
             loss_recons = torch.divide(loss_recons, edge_num)                  
             loss2 = torch.add(loss2,loss_recons)
         loss1 = torch.add(loss1,self.loss(self.inputs['target'], q_pred))
-        # with open('loss_30-50_woCLA.txt', 'a') as f:
-        #     f.write("{} {}\n".format(loss1.item(), loss2.item()))
         loss = torch.add(loss1, loss2, alpha = Alpha)
         return loss
 
@@ -446,7 +415,7 @@ class KARL:
         eps_step = 10000.0
         loss = 0
 
-        save_dir = './models/g0-1_10w_TORCH-Model_%s_%s_%s'%(self.g_type,NUM_MIN, NUM_MAX)
+        save_dir = './models/KARL_%s_%s_%s'%(self.g_type,NUM_MIN, NUM_MAX)
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
         VCFile = '%s/ModelVC_%d_%d.csv'%(save_dir, NUM_MIN, NUM_MAX)
@@ -457,12 +426,11 @@ class KARL:
                 line_ctr = f_read.read().count("\n")
                 f_read.close()
                 start_iter = max(300 * (line_ctr-1), 0)
-                start_model = '%s/nrange_%d_%d_iter_%d.ckpt' % (save_dir, NUM_MIN, NUM_MAX, start_iter)
+                start_model = '%s/karl_%d_%d_iter_%d.ckpt' % (save_dir, NUM_MIN, NUM_MAX, start_iter)
                 print(f'Found VCFile {VCFile}, choose start model: {start_model}')
                 if(os.path.isfile(VCFile)):
                     self.LoadModel(start_model)
                     print(f'skipping iterations that are already done, starting at iter {start_iter}..')                    
-                    # append instead of new write
                     f_out = open(VCFile, 'a')
                 else:
                     print('failed to load starting model, start iteration from 0..')
@@ -474,7 +442,6 @@ class KARL:
         best_frac = inf
         for iter in range(MAX_ITERATION):
             start = time.perf_counter()
-            ###########-----------------------normal training data setup(start) -----------------##############################
             if( (iter and iter % 5000 == 0) or (iter==start_iter)):
                 self.gen_new_graphs(NUM_MIN, NUM_MAX)
             eps = eps_end + max(0., (eps_start - eps_end) * (eps_step - iter) / eps_step)
@@ -509,9 +476,6 @@ class KARL:
             if( (iter % UPDATE_TIME == 0) or (iter==start_iter)):
                 self.TakeSnapShot()
             self.Fit()
-            # for name, param in self.MultiDismantler_net.named_parameters():
-            #     print("Parameter:", name)
-            #     print("Gradient:", param.grad)
         f_out.close()
 
 
@@ -528,7 +492,7 @@ class KARL:
 
 
     def Evaluate(self, data_test, data_test_name,data_type, model_file=None):
-        if model_file == None:  #if user do not specify the model_file
+        if model_file == None: 
             model_file = self.findModel()
         print ('The best model is :%s'%(model_file))
         sys.stdout.flush()
@@ -541,13 +505,6 @@ class KARL:
         for i in tqdm(range(n_test)):
             adj1 = np.load(f"../../data/synthetic/{data_type}/syn_%s/adj1_%s.npy"%(data_test_name,i))
             adj2 = np.load(f"../../data/synthetic/{data_type}/syn_%s/adj2_%s.npy"%(data_test_name,i))
-            # g = self.gen_graph(int(data_test_name), int(data_test_name))
-            # if not os.path.exists(f"./{data_type}/syn_%s"%data_test_name):
-            #     os.makedirs(f"./{data_type}/syn_%s"%data_test_name, exist_ok=True)
-            # adj1 = self.adj_list_to_adj(g.adj_list[0])
-            # # np.save("./data_k/syn_%s/adj1_%s"%(data_test_name,i),adj1)
-            # adj2 = self.adj_list_to_adj(g.adj_list[1])
-            # # np.save("./data_k/syn_%s/adj2_%s"%(data_test_name,i),adj2)
             G1 = nx.from_numpy_array(adj1)
             G2 = nx.from_numpy_array(adj2)
             g = graph.Graph_test(G1,G2)
@@ -620,21 +577,6 @@ class KARL:
         layers_matrix, graphs = self.read_multiplex(
         "../../data/real/%s"%(test_name),num_nodes)
         g = graph.Graph_test(graphs[layers[0]-1],graphs[layers[1]-1])
-        # adj1 = np.array([[0,1,1,0,0,0],
-        #                 [1,0,1,1,1,1],
-        #                 [1,1,0,1,1,1],
-        #                 [0,1,1,0,1,0],
-        #                 [0,1,1,1,0,1],
-        #                 [0,1,1,0,1,0]])      
-        # adj2 = np.array([[0,1,1,0,1,0],
-        #                 [1,0,0,1,0,1],
-        #                 [1,0,0,0,0,1],
-        #                 [0,1,0,0,1,0],
-        #                 [1,0,0,1,0,0],
-        #                 [0,1,1,0,0,0]])
-        #G1 = nx.from_numpy_matrix(adj1)
-        #G2 = nx.from_numpy_matrix(adj2)
-        #g = graph.Graph_test(G1,G2)
         Mcc_average = [0] * g.num_nodes
         result_list_score = []
         with open(result_file1, 'w') as f_out:
@@ -864,18 +806,13 @@ class KARL:
         cost = 0.0
         sol = []
         while (not self.test_env.isTerminal()):
-            # cost += 1
             list_pred = self.PredictWithCurrentQNet(g_list, [self.test_env.action_list], [self.test_env.remove_edge])
-            # new_action = self.argMax(list_pred[0])
             new_action = self.argMax(list_pred[0])
             self.test_env.stepWithoutReward(new_action)
             sol.append(new_action)
         nodes = list(range(g_list[0].num_nodes))
-        #solution = sol + list(set(nodes)^set(sol))
-        #Robustness = self.utils.getRobustness(g_list[0], solution)
         remian_nodes = list(set(nodes)^set(sol))
         return self.test_env.score + len(remian_nodes) / (self.test_env.graph.max_rank * self.test_env.graph.num_nodes)
-        #return Robustness
 
 
     def GetSol(self, gid, step=1):
@@ -885,13 +822,9 @@ class KARL:
         g_list.append(g)
         cost = 0.0
         sol = []
-        # new_n = math.sqrt(g.num_nodes)/g.max_rank
         while (not self.test_env.isTerminal()):
             list_pred = self.PredictWithCurrentQNet(g_list, [self.test_env.action_list], [self.test_env.remove_edge])
             batchSol = np.argsort(-list_pred[0])[:step]
-            # if self.test_env.MaxCCList[-1] <= new_n:
-            #     break
-            # else:
             for new_action in batchSol:
                 if not self.test_env.isTerminal():
                     self.test_env.stepWithoutReward(new_action)
@@ -899,22 +832,20 @@ class KARL:
                 else:
                     break
         cost_value = len(sol)/(g.num_nodes)
-
         nodes = list(range(g.num_nodes))
         remain_nodes = list(set(nodes)^set(sol))
-        #score_total = self.test_env.score + (len(remain_nodes)-1) / (g.max_rank * g.num_nodes)
         return self.test_env.score, sol, cost_value
 
 
     def SaveModel(self,model_path):
-        torch.save(self.MultiDismantler_net.state_dict(), model_path)
+        torch.save(self.karl_net.state_dict(), model_path)
         print('model has been saved success!')
 
     def LoadModel(self,model_path):
         try:
-            self.MultiDismantler_net.load_state_dict(torch.load(model_path))
+            self.karl_net.load_state_dict(torch.load(model_path))
         except:
-            self.MultiDismantler_net.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+            self.karl_net.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 
         print('restore model from file successfully')
 
@@ -941,7 +872,6 @@ class KARL:
 
 
     def HXA(self, g, method):
-        # 'HDA', 'HBA', 'HPRA', ''
         sol = []
         G = g.copy()
         while (nx.number_of_edges(G)>0):
